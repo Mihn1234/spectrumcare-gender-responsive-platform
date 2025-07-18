@@ -13,10 +13,10 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
 
-  // Static export for deployment
-  output: 'export',
-  distDir: 'out',
-  trailingSlash: true,
+  // Dynamic deployment for Vercel
+  // output: 'export',
+  // distDir: 'out',
+  // trailingSlash: true,
 
   // Image optimization for static export
   images: {
