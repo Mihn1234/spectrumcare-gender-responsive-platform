@@ -1,0 +1,397 @@
+# ============================================================================
+# SpectrumCare Custom Domain Ingress Configuration
+# Production-ready multi-domain setup for platform services
+# ============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: spectrum-care-custom-domains
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: ingress-custom
+    environment: production
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-rps: "200"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+
+    # Enhanced security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://api.stripe.com https://*.stripe.com wss: https:; frame-src 'self' https://js.stripe.com https://hooks.stripe.com; object-src 'none'; base-uri 'self'; form-action 'self';";
+
+      # Cache control for static assets
+      location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+      }
+
+spec:
+  tls:
+  # Main platform domain
+  - hosts:
+    - platform.spectrumcare.co.uk
+    - www.platform.spectrumcare.co.uk
+    secretName: platform-spectrumcare-tls
+
+  # Professional services domain
+  - hosts:
+    - professionals.spectrumcare.co.uk
+    - www.professionals.spectrumcare.co.uk
+    secretName: professionals-spectrumcare-tls
+
+  # Enterprise LA domain
+  - hosts:
+    - enterprise.spectrumcare.co.uk
+    - www.enterprise.spectrumcare.co.uk
+    secretName: enterprise-spectrumcare-tls
+
+  # API domain
+  - hosts:
+    - api.spectrumcare.co.uk
+    secretName: api-spectrumcare-tls
+
+  # Admin domain
+  - hosts:
+    - admin.spectrumcare.co.uk
+    secretName: admin-spectrumcare-tls
+
+  # Main company domain (marketing site)
+  - hosts:
+    - spectrumcare.co.uk
+    - www.spectrumcare.co.uk
+    secretName: main-spectrumcare-tls
+
+  rules:
+  # ========================================
+  # Main Platform Domain
+  # ========================================
+  - host: platform.spectrumcare.co.uk
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+
+  - host: www.platform.spectrumcare.co.uk
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+
+  # ========================================
+  # Professional Services Domain
+  # ========================================
+  - host: professionals.spectrumcare.co.uk
+    http:
+      paths:
+      # Professional portal routes
+      - path: /professional(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Professional marketplace
+      - path: /professional-marketplace(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # White-label services
+      - path: /professional/white-label(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Root redirect to professional portal
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+
+  # ========================================
+  # Enterprise LA Domain
+  # ========================================
+  - host: enterprise.spectrumcare.co.uk
+    http:
+      paths:
+      # LA Portal routes
+      - path: /la-portal(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Enterprise-specific routes
+      - path: /enterprise(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Root redirect to enterprise portal
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+
+  # ========================================
+  # API Domain
+  # ========================================
+  - host: api.spectrumcare.co.uk
+    http:
+      paths:
+      # API routes
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # API v1 routes
+      - path: /v1(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Webhook routes
+      - path: /webhook(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Root API documentation
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+
+  # ========================================
+  # Admin Domain
+  # ========================================
+  - host: admin.spectrumcare.co.uk
+    http:
+      paths:
+      # Admin routes (restricted access)
+      - path: /admin(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Dev tools (production admin)
+      - path: /dev(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Metrics and monitoring
+      - path: /metrics(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+      # Root admin portal
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+
+  # ========================================
+  # Main Company Domain (Marketing)
+  # ========================================
+  - host: spectrumcare.co.uk
+    http:
+      paths:
+      # Marketing/landing pages
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+
+  - host: www.spectrumcare.co.uk
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+
+---
+# ============================================================================
+# Certificate Issuers for Automatic SSL
+# ============================================================================
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  namespace: spectrum-care-production
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@spectrumcare.co.uk
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+# ============================================================================
+# DNS Configuration Guide (External DNS Records)
+# ============================================================================
+# Configure these DNS records in your domain registrar:
+#
+# A Records:
+# platform.spectrumcare.co.uk      -> [Load Balancer IP]
+# professionals.spectrumcare.co.uk -> [Load Balancer IP]
+# enterprise.spectrumcare.co.uk    -> [Load Balancer IP]
+# api.spectrumcare.co.uk           -> [Load Balancer IP]
+# admin.spectrumcare.co.uk         -> [Load Balancer IP]
+# spectrumcare.co.uk               -> [Load Balancer IP]
+#
+# CNAME Records:
+# www.platform.spectrumcare.co.uk      -> platform.spectrumcare.co.uk
+# www.professionals.spectrumcare.co.uk -> professionals.spectrumcare.co.uk
+# www.enterprise.spectrumcare.co.uk    -> enterprise.spectrumcare.co.uk
+# www.spectrumcare.co.uk               -> spectrumcare.co.uk
+#
+# Get Load Balancer IP:
+# kubectl get service spectrum-care-service -n spectrum-care-production
+
+---
+# ============================================================================
+# Load Balancer Service with Static IP (for DNS)
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: spectrum-care-loadbalancer
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: loadbalancer
+  annotations:
+    # AWS specific annotations
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "80"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "tcp"
+
+    # Azure specific annotations (uncomment if using Azure)
+    # service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+    # service.beta.kubernetes.io/azure-pip-name: "spectrum-care-public-ip"
+
+    # GCP specific annotations (uncomment if using GCP)
+    # cloud.google.com/load-balancer-type: "External"
+    # cloud.google.com/neg: '{"ingress": true}'
+spec:
+  type: LoadBalancer
+  selector:
+    app: spectrum-care
+    component: web
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 3000
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# ============================================================================
+# Monitoring for Custom Domains
+# ============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: spectrum-care-domains
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: spectrum-care
+      component: web
+  endpoints:
+  - port: http
+    interval: 30s
+    path: /api/health
+    honorLabels: true
+    relabelings:
+    - sourceLabels: [__address__]
+      targetLabel: instance
+    - sourceLabels: [__meta_kubernetes_service_name]
+      targetLabel: service
+    - sourceLabels: [__meta_kubernetes_namespace]
+      targetLabel: namespace

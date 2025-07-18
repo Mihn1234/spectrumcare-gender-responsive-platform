@@ -1,0 +1,736 @@
+# ============================================================================
+# SpectrumCare Enterprise Platform - Database Infrastructure
+# PostgreSQL and Redis Production Deployment
+# ============================================================================
+
+# ============================================================================
+# PostgreSQL StatefulSet for Production
+# ============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-primary
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: database
+    role: primary
+spec:
+  serviceName: postgres-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      component: database
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: postgres
+        component: database
+        role: primary
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          value: "spectrum_care_production"
+        - name: POSTGRES_USER
+          value: "spectrum_care"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: spectrum-care-secrets
+              key: DB_PASSWORD
+        - name: POSTGRES_INITDB_ARGS
+          value: "--auth-host=md5"
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - spectrum_care
+            - -d
+            - spectrum_care_production
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - spectrum_care
+            - -d
+            - spectrum_care_production
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+      - name: postgres-init
+        configMap:
+          name: postgres-init-scripts
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "gp3-encrypted"
+      resources:
+        requests:
+          storage: 100Gi
+
+---
+# ============================================================================
+# PostgreSQL Read Replica for Load Distribution
+# ============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-replica
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: database
+    role: replica
+spec:
+  serviceName: postgres-replica-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: postgres
+      component: database
+      role: replica
+  template:
+    metadata:
+      labels:
+        app: postgres
+        component: database
+        role: replica
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: PGUSER
+          value: "replica_user"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: spectrum-care-secrets
+              key: DB_PASSWORD
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        - name: POSTGRES_PRIMARY_HOST
+          value: "postgres-service.spectrum-care-production.svc.cluster.local"
+        - name: POSTGRES_REPLICA_MODE
+          value: "slave"
+        - name: POSTGRES_MASTER_SERVICE
+          value: "postgres-service"
+        volumeMounts:
+        - name: postgres-replica-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - replica_user
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - replica_user
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-replica-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "gp3-encrypted"
+      resources:
+        requests:
+          storage: 100Gi
+
+---
+# ============================================================================
+# PostgreSQL Services
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: database
+    role: primary
+spec:
+  selector:
+    app: postgres
+    component: database
+    role: primary
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica-service
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: database
+    role: replica
+spec:
+  selector:
+    app: postgres
+    component: database
+    role: replica
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: database
+spec:
+  selector:
+    app: postgres
+    component: database
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  clusterIP: None
+
+---
+# ============================================================================
+# PostgreSQL Configuration
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: config
+data:
+  postgresql.conf: |
+    # ========================================
+    # PostgreSQL Production Configuration
+    # ========================================
+
+    # Connection Settings
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+
+    # Memory Settings
+    shared_buffers = 1GB
+    effective_cache_size = 3GB
+    work_mem = 4MB
+    maintenance_work_mem = 256MB
+
+    # WAL Settings
+    wal_level = replica
+    max_wal_senders = 3
+    wal_keep_size = 1GB
+    hot_standby = on
+    hot_standby_feedback = on
+
+    # Performance Settings
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    checkpoint_timeout = 15min
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_rotation_size = 10MB
+    log_min_duration_statement = 1000
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    log_checkpoints = on
+    log_connections = on
+    log_disconnections = on
+    log_lock_waits = on
+    log_temp_files = 0
+
+    # Security
+    ssl = on
+    ssl_cert_file = 'server.crt'
+    ssl_key_file = 'server.key'
+
+    # Monitoring
+    track_activities = on
+    track_counts = on
+    track_io_timing = on
+    track_functions = all
+
+    # Backup and Recovery
+    archive_mode = on
+    archive_command = 'pgbackrest --stanza=main archive-push %p'
+
+    # Autovacuum
+    autovacuum = on
+    autovacuum_max_workers = 3
+    autovacuum_naptime = 1min
+    autovacuum_vacuum_threshold = 50
+    autovacuum_analyze_threshold = 50
+
+---
+# ============================================================================
+# PostgreSQL Initialization Scripts
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: init
+data:
+  01-init-database.sql: |
+    -- SpectrumCare Platform Database Initialization
+
+    -- Create extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+    CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+    -- Create replica user
+    CREATE USER replica_user WITH REPLICATION ENCRYPTED PASSWORD 'replica_password';
+
+    -- Grant necessary permissions
+    GRANT CONNECT ON DATABASE spectrum_care_production TO replica_user;
+
+    -- Create monitoring user
+    CREATE USER monitoring WITH ENCRYPTED PASSWORD 'monitoring_password';
+    GRANT pg_monitor TO monitoring;
+
+    -- Performance monitoring view
+    CREATE OR REPLACE VIEW performance_stats AS
+    SELECT
+      schemaname,
+      tablename,
+      attname,
+      n_distinct,
+      correlation
+    FROM pg_stats
+    WHERE schemaname = 'public';
+
+    -- Create backup role
+    CREATE ROLE backup;
+    GRANT USAGE ON SCHEMA public TO backup;
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO backup;
+
+  02-create-indexes.sql: |
+    -- Performance indexes for production
+
+    -- Will be applied after main schema is loaded
+    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_email_active ON users(email) WHERE is_active = true;
+    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cases_tenant_status ON ehc_cases(tenant_id, status) WHERE status != 'CLOSED';
+    -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_tenant_date ON audit_logs(tenant_id, created_at);
+
+---
+# ============================================================================
+# Redis Cluster Deployment
+# ============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-cluster
+  namespace: spectrum-care-production
+  labels:
+    app: redis
+    component: cache
+spec:
+  serviceName: redis-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis
+      component: cache
+  template:
+    metadata:
+      labels:
+        app: redis
+        component: cache
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        - containerPort: 16379
+          name: cluster-bus
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: spectrum-care-secrets
+              key: REDIS_PASSWORD
+        command:
+        - redis-server
+        args:
+        - /etc/redis/redis.conf
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        volumeMounts:
+        - name: redis-config
+          mountPath: /etc/redis
+        - name: redis-data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - $(REDIS_PASSWORD)
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "gp3-encrypted"
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# ============================================================================
+# Redis Services
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: spectrum-care-production
+  labels:
+    app: redis
+    component: cache
+spec:
+  selector:
+    app: redis
+    component: cache
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: spectrum-care-production
+  labels:
+    app: redis
+    component: cache
+spec:
+  selector:
+    app: redis
+    component: cache
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+  - port: 16379
+    targetPort: 16379
+    name: cluster-bus
+  clusterIP: None
+
+---
+# ============================================================================
+# Redis Configuration
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: spectrum-care-production
+  labels:
+    app: redis
+    component: config
+data:
+  redis.conf: |
+    # ========================================
+    # Redis Production Configuration
+    # ========================================
+
+    # Network
+    bind 0.0.0.0
+    port 6379
+    timeout 300
+    tcp-keepalive 300
+
+    # General
+    daemonize no
+    supervised no
+    pidfile /var/run/redis_6379.pid
+    loglevel notice
+    logfile ""
+    databases 16
+
+    # Memory Management
+    maxmemory 400mb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+
+    # AOF
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    aof-load-truncated yes
+    aof-use-rdb-preamble yes
+
+    # Security
+    protected-mode yes
+
+    # Performance
+    tcp-backlog 511
+
+    # Client Management
+    maxclients 10000
+
+    # Slow Log
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+    # Latency Monitoring
+    latency-monitor-threshold 100
+
+    # Notifications
+    notify-keyspace-events ""
+
+---
+# ============================================================================
+# Database Backup CronJob
+# ============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: backup
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: postgres-backup
+            image: postgres:15-alpine
+            env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spectrum-care-secrets
+                  key: DB_PASSWORD
+            - name: PGHOST
+              value: "postgres-service.spectrum-care-production.svc.cluster.local"
+            - name: PGUSER
+              value: "spectrum_care"
+            - name: PGDATABASE
+              value: "spectrum_care_production"
+            command:
+            - /bin/sh
+            - -c
+            - |
+              BACKUP_FILE="spectrum-care-$(date +%Y%m%d-%H%M%S).sql"
+              echo "Starting backup: $BACKUP_FILE"
+              pg_dump -h $PGHOST -U $PGUSER -d $PGDATABASE -f /backups/$BACKUP_FILE
+              echo "Backup completed: $BACKUP_FILE"
+
+              # Keep only last 30 days of backups
+              find /backups -name "spectrum-care-*.sql" -mtime +30 -delete
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: postgres-backup-pvc
+
+---
+# ============================================================================
+# Backup Storage
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backup-pvc
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: "gp3-encrypted"
+
+---
+# ============================================================================
+# Database Monitoring ServiceMonitor for Prometheus
+# ============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres-metrics
+  namespace: spectrum-care-production
+  labels:
+    app: postgres
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: postgres-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis-metrics
+  namespace: spectrum-care-production
+  labels:
+    app: redis
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: redis-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics

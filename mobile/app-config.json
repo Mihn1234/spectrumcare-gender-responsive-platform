@@ -1,0 +1,448 @@
+{
+  "version": "72.0.0",
+  "appVersion": "1.0.0",
+  "buildNumber": "72001",
+  "apps": {
+    "family": {
+      "name": "SpectrumCare Family",
+      "bundleId": "com.spectrumcare.family",
+      "description": "AI-powered SEND health platform for families",
+      "category": "Medical",
+      "platforms": {
+        "ios": {
+          "minimumVersion": "14.0",
+          "targetVersion": "17.0",
+          "deviceSupport": ["iPhone", "iPad"],
+          "capabilities": [
+            "HealthKit",
+            "Voice Recording",
+            "Push Notifications",
+            "Background Processing",
+            "Camera",
+            "Microphone",
+            "Location (Emergency Only)",
+            "Biometric Authentication"
+          ],
+          "frameworks": [
+            "SwiftUI",
+            "HealthKit",
+            "AVFoundation",
+            "CoreML",
+            "LocalAuthentication",
+            "UserNotifications",
+            "WebRTC"
+          ]
+        },
+        "android": {
+          "minimumSdkVersion": 26,
+          "targetSdkVersion": 34,
+          "compileSdkVersion": 34,
+          "permissions": [
+            "RECORD_AUDIO",
+            "CAMERA",
+            "ACCESS_FINE_LOCATION",
+            "VIBRATE",
+            "USE_BIOMETRIC",
+            "USE_FINGERPRINT",
+            "FOREGROUND_SERVICE",
+            "SYSTEM_ALERT_WINDOW"
+          ],
+          "libraries": [
+            "AndroidX",
+            "Jetpack Compose",
+            "Room Database",
+            "WorkManager",
+            "CameraX",
+            "ML Kit",
+            "WebRTC"
+          ]
+        }
+      },
+      "features": {
+        "core": [
+          {
+            "name": "Health Tracking",
+            "description": "Real-time health metrics tracking with voice input",
+            "components": [
+              "Behavior scoring (1-10 scale)",
+              "Mood tracking with emoji interface",
+              "Sleep quality logging",
+              "Medication reminders",
+              "Symptom tracking",
+              "Voice-to-text health logging"
+            ]
+          },
+          {
+            "name": "Emergency Crisis Button",
+            "description": "One-tap emergency response with GPS location",
+            "components": [
+              "Emergency contacts notification",
+              "GPS location sharing",
+              "Crisis team alert",
+              "Emergency services option",
+              "Voice message recording",
+              "Medical information sharing"
+            ]
+          },
+          {
+            "name": "Video Consultations",
+            "description": "Secure video calls with healthcare professionals",
+            "components": [
+              "HD video calling",
+              "Screen sharing",
+              "File sharing during calls",
+              "Session recording (with consent)",
+              "Multi-party calls",
+              "Appointment scheduling"
+            ]
+          },
+          {
+            "name": "AI Insights",
+            "description": "Personalized insights and recommendations",
+            "components": [
+              "Daily health summaries",
+              "Pattern recognition alerts",
+              "Predictive analytics",
+              "Behavioral trend analysis",
+              "Treatment recommendations",
+              "Progress tracking"
+            ]
+          }
+        ],
+        "advanced": [
+          {
+            "name": "Voice Assistant",
+            "description": "Natural language health interaction",
+            "components": [
+              "Voice command recognition",
+              "Emotional tone analysis",
+              "Multi-language support",
+              "Conversation memory",
+              "Smart suggestions",
+              "Accessibility features"
+            ]
+          },
+          {
+            "name": "Offline Capability",
+            "description": "Core features work without internet",
+            "components": [
+              "Local data storage",
+              "Offline health logging",
+              "Sync when connected",
+              "Emergency features always available",
+              "Cached medical information",
+              "Local AI processing"
+            ]
+          },
+          {
+            "name": "Integration Hub",
+            "description": "Connect with healthcare systems",
+            "components": [
+              "NHS integration",
+              "School data sync",
+              "Insurance integration",
+              "Pharmacy connections",
+              "Wearable device sync",
+              "Third-party health apps"
+            ]
+          }
+        ]
+      },
+      "security": {
+        "authentication": [
+          "Biometric authentication (fingerprint/face)",
+          "PIN/password backup",
+          "Multi-factor authentication",
+          "Session timeout",
+          "Device binding"
+        ],
+        "dataProtection": [
+          "End-to-end encryption",
+          "Local data encryption",
+          "Secure key storage",
+          "HIPAA compliance",
+          "GDPR compliance",
+          "NHS Digital standards"
+        ],
+        "privacy": [
+          "Minimal data collection",
+          "User consent management",
+          "Data retention controls",
+          "Anonymous analytics",
+          "Opt-out capabilities"
+        ]
+      },
+      "accessibility": {
+        "ios": [
+          "VoiceOver support",
+          "Switch Control",
+          "Voice Control",
+          "Large text support",
+          "High contrast mode",
+          "Reduce motion",
+          "Guided Access"
+        ],
+        "android": [
+          "TalkBack support",
+          "Switch Access",
+          "Voice Access",
+          "Magnification",
+          "High contrast text",
+          "Remove animations",
+          "Sound amplifier"
+        ]
+      }
+    },
+    "professional": {
+      "name": "SpectrumCare Professional",
+      "bundleId": "com.spectrumcare.professional",
+      "description": "Clinical platform for SEND healthcare professionals",
+      "category": "Medical",
+      "platforms": {
+        "ios": {
+          "minimumVersion": "15.0",
+          "targetVersion": "17.0",
+          "deviceSupport": ["iPhone", "iPad", "Mac (Catalyst)"],
+          "capabilities": [
+            "HealthKit Integration",
+            "Document Scanning",
+            "Advanced Camera",
+            "Professional Audio",
+            "Background Processing",
+            "Enterprise SSO"
+          ]
+        },
+        "android": {
+          "minimumSdkVersion": 28,
+          "targetSdkVersion": 34,
+          "permissions": [
+            "CAMERA",
+            "RECORD_AUDIO",
+            "READ_EXTERNAL_STORAGE",
+            "WRITE_EXTERNAL_STORAGE",
+            "MANAGE_DOCUMENTS",
+            "SYSTEM_ALERT_WINDOW"
+          ]
+        }
+      },
+      "features": {
+        "clinical": [
+          {
+            "name": "Patient Portfolio",
+            "description": "Comprehensive patient management",
+            "components": [
+              "Caseload overview",
+              "Risk stratification",
+              "Progress tracking",
+              "Alert management",
+              "Communication timeline",
+              "Treatment planning"
+            ]
+          },
+          {
+            "name": "AI Diagnostic Tools",
+            "description": "AI-assisted clinical decision support",
+            "components": [
+              "Diagnostic recommendations",
+              "Confidence scoring",
+              "Evidence compilation",
+              "Differential diagnosis",
+              "Treatment suggestions",
+              "Outcome predictions"
+            ]
+          },
+          {
+            "name": "Assessment Suite",
+            "description": "Digital assessment tools",
+            "components": [
+              "ADOS-2 digital interface",
+              "M-CHAT-R scoring",
+              "Vineland adaptive scales",
+              "Custom assessment forms",
+              "Progress measurement",
+              "Standardized reporting"
+            ]
+          }
+        ],
+        "productivity": [
+          {
+            "name": "Clinical Notes",
+            "description": "Efficient documentation system",
+            "components": [
+              "Voice-to-text dictation",
+              "Template libraries",
+              "Smart auto-complete",
+              "SOAP note formatting",
+              "Digital signatures",
+              "Secure sharing"
+            ]
+          },
+          {
+            "name": "Scheduling",
+            "description": "Appointment and task management",
+            "components": [
+              "Calendar integration",
+              "Automated reminders",
+              "Conflict detection",
+              "Resource booking",
+              "Telehealth scheduling",
+              "Follow-up tracking"
+            ]
+          },
+          {
+            "name": "Billing Integration",
+            "description": "Streamlined billing and coding",
+            "components": [
+              "CPT code suggestions",
+              "Time tracking",
+              "Insurance verification",
+              "Billing submissions",
+              "Payment tracking",
+              "Financial reporting"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "deployment": {
+    "appStores": {
+      "ios": {
+        "appStoreUrl": "https://apps.apple.com/app/spectrumcare-family",
+        "testFlightUrl": "https://testflight.apple.com/join/spectrumcare",
+        "reviewGuidelines": "Medical app category compliance",
+        "contentRating": "4+ (Medical/Health)",
+        "keywords": ["autism", "ADHD", "special needs", "healthcare", "AI", "NHS"]
+      },
+      "android": {
+        "playStoreUrl": "https://play.google.com/store/apps/details?id=com.spectrumcare.family",
+        "internalTestingUrl": "https://play.google.com/console/internal-testing",
+        "contentRating": "Everyone",
+        "targetAudience": "Healthcare professionals and families",
+        "keywords": ["autism", "ADHD", "special needs", "healthcare", "AI", "NHS"]
+      }
+    },
+    "distribution": {
+      "family_app": {
+        "target_downloads": "10K first month",
+        "marketing_channels": [
+          "NHS Trust partnerships",
+          "Autism charity networks",
+          "Google/Apple search ads",
+          "Social media campaigns",
+          "Professional referrals"
+        ],
+        "launch_regions": ["UK", "US (NY pilot)", "Netherlands (EU pilot)"]
+      },
+      "professional_app": {
+        "target_downloads": "1K first month",
+        "distribution_channels": [
+          "Direct to NHS professionals",
+          "Medical conferences",
+          "Professional associations",
+          "Peer referrals",
+          "Enterprise sales"
+        ],
+        "certification_required": true
+      }
+    }
+  },
+  "analytics": {
+    "tracking": {
+      "user_engagement": [
+        "Daily active users",
+        "Session duration",
+        "Feature adoption",
+        "User retention",
+        "Crash reports",
+        "Performance metrics"
+      ],
+      "clinical_metrics": [
+        "Health log frequency",
+        "AI insight engagement",
+        "Video consultation usage",
+        "Emergency feature usage",
+        "Professional response times",
+        "Outcome improvements"
+      ],
+      "business_metrics": [
+        "Conversion rates",
+        "Subscription renewals",
+        "Customer satisfaction",
+        "Support requests",
+        "App store ratings",
+        "Revenue attribution"
+      ]
+    },
+    "privacy_compliance": {
+      "data_minimization": "Only essential analytics collected",
+      "user_consent": "Explicit opt-in for all tracking",
+      "anonymization": "Personal data anonymized before analysis",
+      "retention": "Analytics data retained for 24 months maximum",
+      "deletion": "User can request data deletion anytime"
+    }
+  },
+  "support": {
+    "documentation": {
+      "user_guides": [
+        "Getting started tutorial",
+        "Feature walkthroughs",
+        "Troubleshooting guide",
+        "FAQ section",
+        "Video tutorials",
+        "Accessibility guide"
+      ],
+      "professional_resources": [
+        "Clinical workflow guide",
+        "Assessment administration",
+        "AI interpretation guide",
+        "Billing and coding help",
+        "Integration setup",
+        "Best practices"
+      ]
+    },
+    "helpdesk": {
+      "channels": [
+        "In-app chat support",
+        "Email: mobile-support@spectrumcare.co.uk",
+        "Phone: +44 20 7946 0958",
+        "Video support sessions",
+        "Community forums"
+      ],
+      "availability": "24/7 for critical issues, 9-5 for general support",
+      "languages": ["English", "Spanish", "French", "German", "Dutch"],
+      "escalation": "Clinical issues escalated to medical team within 1 hour"
+    }
+  },
+  "updates": {
+    "release_cycle": "Bi-weekly feature updates",
+    "security_updates": "Immediate for critical issues",
+    "auto_update": "Enabled for security updates",
+    "backward_compatibility": "2 major versions supported",
+    "beta_testing": "TestFlight (iOS) and Internal Testing (Android)",
+    "rollout_strategy": "Gradual rollout over 7 days"
+  },
+  "compliance": {
+    "medical_regulations": [
+      "FDA 510(k) compliance (US)",
+      "CE marking (EU)",
+      "NHS Digital standards (UK)",
+      "HIPAA compliance (US)",
+      "GDPR compliance (EU/UK)"
+    ],
+    "app_store_policies": [
+      "Apple Health app guidelines",
+      "Google Play medical app policy",
+      "Content rating compliance",
+      "Privacy policy requirements",
+      "Age-appropriate design"
+    ],
+    "security_standards": [
+      "OWASP Mobile Top 10",
+      "SOC 2 Type II",
+      "ISO 27001",
+      "Penetration testing quarterly",
+      "Security code review"
+    ]
+  }
+}

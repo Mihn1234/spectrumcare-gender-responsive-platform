@@ -1,0 +1,523 @@
+# ============================================================================
+# SpectrumCare Enterprise Platform - Kubernetes Production Deployment
+# ============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spectrum-care-production
+  labels:
+    app: spectrum-care
+    environment: production
+    version: v1.0.0
+
+---
+# ============================================================================
+# ConfigMap for Application Configuration
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spectrum-care-config
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: config
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  HOSTNAME: "0.0.0.0"
+  LOG_LEVEL: "info"
+
+  # Database Configuration
+  DB_HOST: "postgres-service.spectrum-care-production.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "spectrum_care_production"
+  DB_POOL_SIZE: "20"
+  DB_IDLE_TIMEOUT: "30000"
+  DB_CONNECTION_TIMEOUT: "10000"
+
+  # Redis Configuration
+  REDIS_HOST: "redis-service.spectrum-care-production.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_KEY_PREFIX: "spectrum:prod:"
+  REDIS_MAX_MEMORY: "512mb"
+
+  # Cache Configuration
+  CACHE_DEFAULT_TTL: "3600"
+  REDIS_EVICTION_POLICY: "allkeys-lru"
+
+  # Metrics Configuration
+  METRICS_COLLECT_INTERVAL: "60000"
+  METRICS_RETENTION_DAYS: "30"
+
+  # Security Configuration
+  BCRYPT_SALT_ROUNDS: "12"
+  SESSION_TIMEOUT: "86400"
+  MAX_LOGIN_ATTEMPTS: "5"
+  LOCKOUT_DURATION: "900"
+  PASSWORD_MIN_LENGTH: "12"
+  MFA_REQUIRED: "true"
+
+  # Performance Thresholds
+  ALERT_RESPONSE_TIME: "1000"
+  ALERT_ERROR_RATE: "0.05"
+  ALERT_CPU_USAGE: "0.8"
+  ALERT_MEMORY_USAGE: "0.9"
+
+---
+# ============================================================================
+# Secret for Sensitive Configuration
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: spectrum-care-secrets
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: secrets
+type: Opaque
+data:
+  # Base64 encoded secrets (replace with actual values)
+  DB_PASSWORD: cGFzc3dvcmQxMjM=  # password123
+  REDIS_PASSWORD: cmVkaXNwYXNz  # redispass
+  JWT_SECRET: c3VwZXJzZWNyZXRqd3RrZXlmb3JzcGVjdHJ1bWNhcmU=  # supersecretjwtkey
+  JWT_REFRESH_SECRET: cmVmcmVzaHNlY3JldGp3dGtleWZvcnNwZWN0cnVt  # refreshsecretjwtkey
+  ENCRYPTION_KEY: ZW5jcnlwdGlvbmtleWZvcnNwZWN0cnVtY2FyZTMyY2hhcnM=  # encryptionkey32chars
+  NEXTAUTH_SECRET: bmV4dGF1dGhzZWNyZXRmb3JzcGVjdHJ1bWNhcmU=  # nextauthsecret
+
+---
+# ============================================================================
+# Deployment for SpectrumCare Application
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spectrum-care-app
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: web
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: spectrum-care
+      component: web
+  template:
+    metadata:
+      labels:
+        app: spectrum-care
+        component: web
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/api/metrics"
+    spec:
+      serviceAccountName: spectrum-care-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: spectrum-care
+        image: spectrumcare/platform:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: DB_USER
+          value: "spectrum_care"
+        envFrom:
+        - configMapRef:
+            name: spectrum-care-config
+        - secretRef:
+            name: spectrum-care-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health/ready
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: logs
+          mountPath: /app/logs
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: spectrum-care-uploads-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: spectrum-care-logs-pvc
+      - name: tmp
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - spectrum-care
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+      - key: "node.kubernetes.io/high-memory"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+---
+# ============================================================================
+# Service for Application Load Balancing
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: spectrum-care-service
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: web
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: spectrum-care
+    component: web
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 3000
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# ============================================================================
+# Horizontal Pod Autoscaler
+# ============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: spectrum-care-hpa
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: spectrum-care-app
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 5
+        periodSeconds: 60
+      selectPolicy: Max
+
+---
+# ============================================================================
+# Persistent Volume Claims for Storage
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spectrum-care-uploads-pvc
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: aws-efs-sc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spectrum-care-logs-pvc
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: logging
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: aws-efs-sc
+
+---
+# ============================================================================
+# Service Account and RBAC
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spectrum-care-service-account
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: rbac
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spectrum-care-role
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: rbac
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spectrum-care-role-binding
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: rbac
+subjects:
+- kind: ServiceAccount
+  name: spectrum-care-service-account
+  namespace: spectrum-care-production
+roleRef:
+  kind: Role
+  name: spectrum-care-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ============================================================================
+# Network Policy for Security
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spectrum-care-network-policy
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: spectrum-care
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: spectrum-care-production
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: spectrum-care-production
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis
+  - to: []  # Allow external traffic for API calls
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+    - protocol: UDP
+      port: 53   # DNS
+
+---
+# ============================================================================
+# Pod Disruption Budget
+# ============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: spectrum-care-pdb
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: availability
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: spectrum-care
+      component: web
+
+---
+# ============================================================================
+# Ingress for External Access
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: spectrum-care-ingress
+  namespace: spectrum-care-production
+  labels:
+    app: spectrum-care
+    component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-rps: "100"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none';";
+spec:
+  tls:
+  - hosts:
+    - platform.spectrumcare.uk
+    - api.spectrumcare.uk
+    - admin.spectrumcare.uk
+    secretName: spectrum-care-tls
+  rules:
+  - host: platform.spectrumcare.uk
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+  - host: api.spectrumcare.uk
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80
+  - host: admin.spectrumcare.uk
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: spectrum-care-service
+            port:
+              number: 80

@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: health-portal-web
+  labels:
+    app: health-portal-web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: health-portal-web
+  template:
+    metadata:
+      labels:
+        app: health-portal-web
+    spec:
+      containers:
+      - name: web
+        image: health-portal:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: health-portal-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: health-portal-secrets
+              key: redis-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: health-portal-secrets
+              key: openai-api-key
+        - name: NHS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: health-portal-secrets
+              key: nhs-api-key
+        - name: AUTH0_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: health-portal-secrets
+              key: auth0-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-portal-service
+spec:
+  selector:
+    app: health-portal-web
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: LoadBalancer
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: health-portal-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: health-portal-web
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: health-portal-secrets
+type: Opaque
+data:
+  database-url: # Base64 encoded DATABASE_URL
+  redis-url: # Base64 encoded REDIS_URL
+  openai-api-key: # Base64 encoded OPENAI_API_KEY
+  nhs-api-key: # Base64 encoded NHS_API_KEY
+  auth0-secret: # Base64 encoded AUTH0_SECRET

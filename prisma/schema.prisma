@@ -1,0 +1,475 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  role          Role      @default(PARENT)
+  avatar        String?
+  phone         String?
+  address       Json?
+  preferences   Json?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relationships
+  patients      Patient[]
+  assessments   Assessment[]
+  appointments  Appointment[]
+  messages      Message[]
+  documents     Document[]
+
+  @@map("users")
+}
+
+model Patient {
+  id                String    @id @default(cuid())
+  userId            String    // Parent/Guardian
+  medicalRecordNo   String?   @unique
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  gender            Gender
+  nhsNumber         String?
+  diagnosis         Json?     // Primary and secondary diagnoses
+  medicalHistory    Json?     // Comprehensive medical history
+  allergies         Json?     // Allergies and sensitivities
+  medications       Json?     // Current medications
+  emergencyContacts Json?     // Emergency contact information
+  careTeam          Json?     // Care team members
+  preferences       Json?     // Communication and care preferences
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relationships
+  user              User      @relation(fields: [userId], references: [id])
+  assessments       Assessment[]
+  appointments      Appointment[]
+  healthRecords     HealthRecord[]
+  treatments        Treatment[]
+  documents         Document[]
+  alerts            Alert[]
+
+  @@map("patients")
+}
+
+model Assessment {
+  id              String          @id @default(cuid())
+  patientId       String
+  userId          String          // Professional conducting assessment
+  type            AssessmentType
+  status          AssessmentStatus @default(PENDING)
+  scheduledDate   DateTime?
+  completedDate   DateTime?
+  duration        Int?            // Duration in minutes
+  location        String?         // Physical or virtual
+  methodology     Json?           // Assessment methodology and tools
+  questions       Json?           // Assessment questions and responses
+  results         Json?           // Assessment results and scores
+  recommendations Json?           // Professional recommendations
+  confidence      Float?          // AI confidence score
+  aiInsights      Json?           // AI-generated insights
+  nextSteps       Json?           // Follow-up actions
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  patient         Patient         @relation(fields: [patientId], references: [id])
+  assessor        User            @relation(fields: [userId], references: [id])
+  documents       Document[]
+
+  @@map("assessments")
+}
+
+model HealthRecord {
+  id              String          @id @default(cuid())
+  patientId       String
+  recordType      HealthRecordType
+  source          DataSource      @default(MANUAL)
+  timestamp       DateTime        @default(now())
+  data            Json            // Health data (vitals, symptoms, etc.)
+  metadata        Json?           // Additional context
+  confidence      Float?          // Data confidence level
+  isVerified      Boolean         @default(false)
+  verifiedBy      String?         // Professional who verified
+  verifiedAt      DateTime?
+  tags            String[]        // Searchable tags
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  patient         Patient         @relation(fields: [patientId], references: [id])
+
+  @@map("health_records")
+}
+
+model Treatment {
+  id              String          @id @default(cuid())
+  patientId       String
+  type            TreatmentType
+  name            String
+  description     String?
+  status          TreatmentStatus @default(PLANNED)
+  startDate       DateTime
+  endDate         DateTime?
+  frequency       String?         // Daily, weekly, etc.
+  dosage          String?         // For medications
+  provider        String?         // Healthcare provider
+  goals           Json?           // Treatment goals
+  progress        Json?           // Progress tracking
+  sideEffects     Json?           // Reported side effects
+  effectiveness   Int?            // 1-10 scale
+  notes           String?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  patient         Patient         @relation(fields: [patientId], references: [id])
+
+  @@map("treatments")
+}
+
+model Appointment {
+  id              String          @id @default(cuid())
+  patientId       String
+  userId          String          // Professional
+  title           String
+  description     String?
+  type            AppointmentType
+  status          AppointmentStatus @default(SCHEDULED)
+  startTime       DateTime
+  endTime         DateTime
+  timezone        String          @default("Europe/London")
+  location        String?         // Physical address or virtual link
+  isVirtual       Boolean         @default(false)
+  roomId          String?         // Virtual room ID
+  preparation     Json?           // Pre-appointment preparation
+  notes           String?         // Session notes
+  outcomes        Json?           // Session outcomes
+  followUp        Json?           // Follow-up actions
+  recordingUrl    String?         // Session recording
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  patient         Patient         @relation(fields: [patientId], references: [id])
+  professional    User            @relation(fields: [userId], references: [id])
+  documents       Document[]
+
+  @@map("appointments")
+}
+
+model Alert {
+  id              String          @id @default(cuid())
+  patientId       String
+  type            AlertType
+  severity        Severity
+  title           String
+  message         String
+  context         Json?           // Additional context data
+  triggeredAt     DateTime        @default(now())
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  actions         Json?           // Recommended actions
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  patient         Patient         @relation(fields: [patientId], references: [id])
+
+  @@map("alerts")
+}
+
+model Document {
+  id              String          @id @default(cuid())
+  userId          String
+  patientId       String?
+  assessmentId    String?
+  appointmentId   String?
+  filename        String
+  originalName    String
+  mimeType        String
+  size            Int
+  url             String
+  type            DocumentType
+  category        String?
+  extractedText   String?         // OCR/PDF extraction
+  aiAnalysis      Json?           // AI analysis results
+  metadata        Json?           // File metadata
+  tags            String[]        // Searchable tags
+  isProcessed     Boolean         @default(false)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  user            User            @relation(fields: [userId], references: [id])
+  patient         Patient?        @relation(fields: [patientId], references: [id])
+  assessment      Assessment?     @relation(fields: [assessmentId], references: [id])
+  appointment     Appointment?    @relation(fields: [appointmentId], references: [id])
+
+  @@map("documents")
+}
+
+model Message {
+  id              String          @id @default(cuid())
+  fromUserId      String
+  toUserId        String
+  content         String
+  type            MessageType     @default(TEXT)
+  attachments     Json?           // File attachments
+  metadata        Json?           // Message metadata
+  isRead          Boolean         @default(false)
+  readAt          DateTime?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relationships
+  fromUser        User            @relation(fields: [fromUserId], references: [id])
+
+  @@map("messages")
+}
+
+// Crisis Management Models
+model CrisisEvent {
+  id              String          @id @default(cuid())
+  patientId       String
+  crisisType      String
+  severity        Severity
+  description     String?
+  aiDetected      Boolean         @default(false)
+  detectionConfidence Float?
+  triggeredAt     DateTime        @default(now())
+  responseTeam    Json?           // Response team members
+  responseActions Json?           // Actions taken
+  resolutionTime  Int?            // Minutes to resolution
+  outcome         Json?           // Crisis outcome
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("crisis_events")
+}
+
+model VoiceInteraction {
+  id              String          @id @default(cuid())
+  patientId       String
+  interactionType String
+  voiceInputUrl   String?
+  transcription   String?
+  intent          String?
+  entities        Json?
+  aiResponse      String?
+  actionsTaken    Json?
+  confidenceScore Float?
+  createdAt       DateTime        @default(now())
+
+  @@map("voice_interactions")
+}
+
+// Health Analytics Models
+model HealthMetric {
+  id              String          @id @default(cuid())
+  patientId       String
+  metricType      String
+  value           Json
+  unit            String?
+  timestamp       DateTime        @default(now())
+  source          DataSource      @default(MANUAL)
+  confidence      Float?
+  notes           String?
+  createdAt       DateTime        @default(now())
+
+  @@map("health_metrics")
+}
+
+model PredictionModel {
+  id              String          @id @default(cuid())
+  modelName       String
+  modelType       String
+  version         String
+  accuracy        Float?
+  trainedAt       DateTime
+  isActive        Boolean         @default(true)
+  parameters      Json?
+  createdAt       DateTime        @default(now())
+
+  @@map("prediction_models")
+}
+
+// Professional Network Enhancement
+model Professional {
+  id              String          @id @default(cuid())
+  userId          String          // Links to User model
+  licenseNumber   String?
+  specializations String[]
+  qualifications  Json?
+  credentials     Json?
+  verificationStatus String       @default("PENDING")
+  practiceType    String?
+  availability    Json?
+  hourlyRate      Float?
+  performanceMetrics Json?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("professionals")
+}
+
+// Enums
+enum Role {
+  PARENT
+  PROFESSIONAL
+  ADMIN
+  CRISIS_TEAM
+  MEDICAL_DIRECTOR
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum AssessmentType {
+  AUTISM_SCREENING
+  ADOS_2
+  SPEECH_LANGUAGE
+  OCCUPATIONAL_THERAPY
+  EDUCATIONAL_PSYCHOLOGY
+  BEHAVIORAL_ANALYSIS
+  MEDICAL_ASSESSMENT
+  CRISIS_ASSESSMENT
+  TELEMEDICINE_CONSULTATION
+  CUSTOM
+}
+
+enum AssessmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum HealthRecordType {
+  VITAL_SIGNS
+  SYMPTOMS
+  BEHAVIOR
+  MOOD
+  SLEEP
+  MEDICATION
+  DIET
+  EXERCISE
+  THERAPY_SESSION
+  CRISIS_EVENT
+  VOICE_LOG
+  PHOTO_LOG
+}
+
+enum DataSource {
+  MANUAL
+  DEVICE
+  AI_GENERATED
+  IMPORTED
+  VOICE_COMMAND
+  MOBILE_APP
+}
+
+enum TreatmentType {
+  MEDICATION
+  THERAPY
+  INTERVENTION
+  SUPPORT_SERVICE
+  EDUCATIONAL_PROGRAM
+  CRISIS_MANAGEMENT
+}
+
+enum TreatmentStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  DISCONTINUED
+}
+
+enum AppointmentType {
+  ASSESSMENT
+  CONSULTATION
+  THERAPY_SESSION
+  FOLLOW_UP
+  CRISIS_INTERVENTION
+  FAMILY_MEETING
+  TELEMEDICINE
+  GROUP_SESSION
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  RESCHEDULED
+}
+
+enum AlertType {
+  HEALTH_CONCERN
+  MEDICATION_REMINDER
+  APPOINTMENT_REMINDER
+  CRISIS_WARNING
+  TREATMENT_UPDATE
+  SYSTEM_NOTIFICATION
+  EMERGENCY_ALERT
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DocumentType {
+  MEDICAL_REPORT
+  ASSESSMENT_REPORT
+  EDUCATIONAL_REPORT
+  LEGAL_DOCUMENT
+  INSURANCE_DOCUMENT
+  THERAPY_NOTES
+  PRESCRIPTION
+  LAB_RESULTS
+  IMAGE
+  VIDEO
+  AUDIO
+  VOICE_RECORDING
+  OTHER
+}
+
+enum MessageType {
+  TEXT
+  VOICE
+  VIDEO
+  DOCUMENT
+  SYSTEM
+  EMERGENCY
+}
